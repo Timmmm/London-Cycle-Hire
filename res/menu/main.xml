@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/show_bikes"
+          android:title="@string/show_bikes" />
+	<item android:id="@+id/show_slots"
+	      android:title="@string/show_slots" />
+	<item android:id="@+id/show_location"
+	      android:title="@string/show_location" />
+	<item android:id="@+id/refresh"
+	      android:title="@string/refresh" />
+    <item android:id="@+id/preferences"
+          android:title="@string/preferences" />
+    <item android:id="@+id/about"
+          android:title="@string/about" />
+</menu>
