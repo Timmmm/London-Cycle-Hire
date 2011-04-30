@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 	<string name="app_name">Cycle Hire</string>
-	<string name="show_bikes">Show Bikes</string>
-	<string name="show_slots">Show Slots</string>
+	<string name="show_bikes">Bikes</string>
+	<string name="show_slots">Slots</string>
 	<string name="refresh">Refresh</string>
-	<string name="show_location">Show Location</string>
+	<string name="show_location">My Location</string>
 	<string name="about">About</string>
 	<string name="preferences">Preferences</string>
 </resources>

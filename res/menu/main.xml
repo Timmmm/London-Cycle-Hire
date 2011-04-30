@@ -1,12 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:id="@+id/show_bikes"
+          android:icon="@drawable/ic_menu_add"
           android:title="@string/show_bikes" />
 	<item android:id="@+id/show_slots"
+	      android:icon="@drawable/ic_menu_subtract"
 	      android:title="@string/show_slots" />
 	<item android:id="@+id/show_location"
+	      android:icon="@drawable/ic_menu_compass"
 	      android:title="@string/show_location" />
 	<item android:id="@+id/refresh"
+	      android:icon="@drawable/ic_menu_refresh"
 	      android:title="@string/refresh" />
  <!--   <item android:id="@+id/preferences"
           android:title="@string/preferences" />

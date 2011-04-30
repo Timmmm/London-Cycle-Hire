@@ -6,13 +6,13 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
+import android.os.Environment;
+import android.util.Log;
 import android.view.*;
+import android.widget.Toast;
 import org.mapsforge.android.maps.*;
 
-import java.io.BufferedInputStream;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
+import java.io.*;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.Timer;
@@ -52,11 +52,31 @@ public class CycleMapActivity extends MapActivity
 		// Request throbber. Must be done before setContentView().
 		requestWindowFeature(Window.FEATURE_INDETERMINATE_PROGRESS);
 
+		// Check SD card.
+		if (!sdOk())
+		{
+			Log.d("CycleMapActivity", "SD card not mounted.");
+			showToast("Error accessing SD card.");
+			finish();
+			return;
+		}
+
+		String storageDir = Environment.getExternalStorageDirectory().getAbsolutePath() + "/Android/data/com.concentriclivers.cyclehire/files";
+		String filename = storageDir + "/london.map";
+		// Write out map file if necessary.
+		if (!writeMap(storageDir, "london.map"))
+		{
+			Log.d("CycleMapActivity", "Couldn't write map.");
+			showToast("Error writing map file to SD card.");
+			finish();
+			return;
+		}
+
 		// Create the map view.
         mapView = new MapView(this);
         mapView.setClickable(true);
         mapView.setBuiltInZoomControls(true);
-        mapView.setMapFile("/sdcard/london.map");
+        mapView.setMapFile(filename);
 		// Docks overlay.
 		dockOverlay = new DockOverlay(this);
 		mapView.getOverlays().add(dockOverlay);
@@ -361,5 +381,65 @@ public class CycleMapActivity extends MapActivity
 			updateTimer = new Timer();
 			updateTimer.schedule(new UpdateDocksTask(), 60*1000); // Update in 60 seconds.
 		}
+	}
+
+
+
+	// Return true if the SD card is accessible.
+	private boolean sdOk()
+	{
+		String state = Environment.getExternalStorageState();
+		return Environment.MEDIA_MOUNTED.equals(state);
+	}
+
+
+
+
+
+
+
+
+
+	// Writes the map stored in the apk to the sd card. TODO: download on first run.
+	private boolean writeMap(String dir, String filename)
+	{
+		File f = new File(dir + "/" + filename);
+		if (f.exists())
+			return true;
+		new File(dir).mkdirs();
+		InputStream is = getResources().openRawResource(R.raw.london);
+		if (is == null)
+		{
+			Log.d("CycleMapActivity", "Couldn't open internal map file!");
+			return false;
+		}
+
+		try
+		{
+			FileOutputStream os = new FileOutputStream(f);
+
+			byte[] buffer = new byte[32768];
+			int len;
+			while ((len = is.read(buffer)) > 0)
+				os.write(buffer, 0, len);
+
+
+			os.close();
+			is.close();
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
+			return false;
+		}
+		return true;
+		// TODO: Close streams even if there is an exception (DAMN YOU JAVA!)
+	}
+
+
+	void showToast(String text)
+	{
+		Toast toast = Toast.makeText(this, text, Toast.LENGTH_LONG);
+		toast.show();
 	}
 }

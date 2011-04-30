@@ -49,7 +49,7 @@ public class DockOverlay extends ItemizedOverlay<DockOverlayItem>
 			{
 			}
 			Drawable m = context.getResources().getDrawable(id);
-			m.setBounds(0, 0, m.getIntrinsicWidth(), m.getIntrinsicHeight());
+			m.setBounds(-m.getIntrinsicWidth()/2, -m.getIntrinsicHeight(), m.getIntrinsicWidth()/2, 0);
 			markers[i] = m;
 		}
 
