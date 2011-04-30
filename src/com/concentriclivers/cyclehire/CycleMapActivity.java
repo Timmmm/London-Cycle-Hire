@@ -1,7 +1,10 @@
 package com.concentriclivers.cyclehire;
 
+import android.graphics.Color;
+import android.graphics.Paint;
 import android.location.Location;
 import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Bundle;
 import android.view.*;
 import org.mapsforge.android.maps.*;
@@ -20,48 +23,109 @@ public class CycleMapActivity extends MapActivity
 	private static final String TAG = "CycleMapActivity";
 
 	private DockOverlay dockOverlay;
-
 	MapView mapView;
+	private LocationManager locationManager;
+	private Paint locationOverlayFill;
+	private Paint locationOverlayOutline;
+	private MapController mapController;
 
-	/**
-	 * Called when the activity is first created.
-	 */
+	private Location currentLocation; // null if unknown.
+	private OverlayCircle locationCircle;
+
+	private ArrayCircleOverlay locationOverlay;
+
+	private static final int TWO_MINUTES = 1000 * 60 * 2;
+
+/*
+	@Override
+	public Object onRetainNonConfigurationInstance()
+	{
+		return currentLocation;
+	}*/
+
+	// Called when the activity is first created.
 	@Override
 	public void onCreate(Bundle savedInstanceState)
 	{
 		super.onCreate(savedInstanceState);
 
+		// Request throbber. Must be done before setContentView().
 		requestWindowFeature(Window.FEATURE_INDETERMINATE_PROGRESS);
 
+		// Create the map view.
         mapView = new MapView(this);
         mapView.setClickable(true);
         mapView.setBuiltInZoomControls(true);
         mapView.setMapFile("/sdcard/london.map");
-        setContentView(mapView);
-
-
-		configureMapView();
-
+		// Docks overlay.
 		dockOverlay = new DockOverlay(this);
-		setTitle("Cycle Hire - Free Bikes");
-
 		mapView.getOverlays().add(dockOverlay);
+		// Location overlay.
+		locationOverlayFill = new Paint(Paint.ANTI_ALIAS_FLAG);
+		locationOverlayFill.setStyle(Paint.Style.FILL);
+		locationOverlayFill.setColor(Color.RED);
+		locationOverlayFill.setAlpha(64);
 
-		triggerUpdates();
+		locationOverlayOutline = new Paint(Paint.ANTI_ALIAS_FLAG);
+		locationOverlayOutline.setStyle(Paint.Style.STROKE);
+		locationOverlayOutline.setColor(Color.RED);
+		locationOverlayOutline.setAlpha(200);
+		locationOverlayOutline.setStrokeWidth(5);
+		locationOverlay = new ArrayCircleOverlay(locationOverlayFill, locationOverlayOutline, this);
+		locationCircle = new OverlayCircle();
+		locationOverlay.addCircle(locationCircle);
+		mapView.getOverlays().add(locationOverlay);
+
+		// Set up window.
+        setContentView(mapView);
+		setTitle("Cycle Hire - Available Bikes");
+
+		// Initialise service references.
+		mapController = mapView.getController();
+		locationManager = (LocationManager)getSystemService(LOCATION_SERVICE);
+
+		// Got to last location.
+		currentLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+		mapController.setCenter(new GeoPoint(currentLocation.getLatitude(), currentLocation.getLongitude()));
+	
 	}
 
+	@Override
+	public void onResume()
+	{
+		super.onResume();
 
-	// API read from this file: http://api.bike-stats.co.uk/service/rest/bikestats?format=csv
+		// Start dock updates.
+		triggerUpdates();
+		// Start position updates.
+		startGPS();
+	}
 
+	@Override
+	public void onPause()
+	{
+		super.onPause();
+
+		// Stop dock updates.
+		stopUpdates();
+		// Stop GPS.
+		stopGPS();
+	}
+
+	// Refresh the docks. This is blocking and is called in another thread.
 	private void refreshDocks()
 	{
-
+		// Download the update file.
 		String csv = downloadTextFile("http://api.bike-stats.co.uk/service/rest/bikestats?format=csv");
 		if (csv.isEmpty())
 			return;
+
 		DockSet dockSet = new DockSet();
 
+		// Decode it.
 		dockSet.loadFromCSV(csv);
+
+		// Update the map overlay. This is threadsafe so it's fine.
 		if (dockSet.numDocks() > 0)
 			dockOverlay.updateDocks(dockSet);
 	}
@@ -121,14 +185,18 @@ public class CycleMapActivity extends MapActivity
 			setTitle("Cycle Hire - Available Slots");
 			return true;
 		case R.id.show_location:
+			if (currentLocation != null)
+			{
+				mapController.setCenter(new GeoPoint(currentLocation.getLatitude(), currentLocation.getLongitude()));
+			}
 			return true;
 		case R.id.refresh:
 			triggerUpdates();
 			return true;
-		case R.id.about:
+/*		case R.id.about:
 			return true;
 		case R.id.preferences:
-			return true;
+			return true;*/
 		default:
 			return super.onOptionsItemSelected(item);
 		}
@@ -138,97 +206,119 @@ public class CycleMapActivity extends MapActivity
 	@Override
 	public boolean onTrackballEvent(MotionEvent event)
 	{
+		// Pass through to map.
 		return mapView.onTrackballEvent(event);
 	}
 
 
-	private void configureMapView()
+	// Determines whether one Location reading is better than the current Location fix
+	protected boolean isBetterLocation(Location location, Location currentBestLocation)
 	{
-		// configure the MapView and activate the zoomLevel buttons
-		mapView.setClickable(true);
-		mapView.setBuiltInZoomControls(true);
-		mapView.setFocusable(true);
+		if (currentBestLocation == null)
+		{
+			// A new location is always better than no location
+			return true;
+		}
 
-		// set the localized text fields
-		mapView.setText(MapView.TextField.KILOMETER, "km");
-		mapView.setText(MapView.TextField.METER, "m");
+		// Check whether the new location fix is newer or older
+		long timeDelta = location.getTime() - currentBestLocation.getTime();
+		boolean isSignificantlyNewer = timeDelta > TWO_MINUTES;
+		boolean isSignificantlyOlder = timeDelta < -TWO_MINUTES;
+		boolean isNewer = timeDelta > 0;
+
+		// If it's been more than two minutes since the current location, use the new location
+		// because the user has likely moved
+		if (isSignificantlyNewer)
+		{
+			return true;
+			// If the new location is more than two minutes older, it must be worse
+		}
+		else if (isSignificantlyOlder)
+		{
+			return false;
+		}
+
+		// Check whether the new location fix is more or less accurate
+		int accuracyDelta = (int) (location.getAccuracy() - currentBestLocation.getAccuracy());
+		boolean isLessAccurate = accuracyDelta > 0;
+		boolean isMoreAccurate = accuracyDelta < 0;
+		boolean isSignificantlyLessAccurate = accuracyDelta > 200;
+
+		// Check if the old and new location are from the same provider
+		boolean isFromSameProvider = isSameProvider(location.getProvider(), currentBestLocation.getProvider());
+
+		// Determine location quality using a combination of timeliness and accuracy
+		if (isMoreAccurate)
+		{
+			return true;
+		}
+		else if (isNewer && !isLessAccurate)
+		{
+			return true;
+		}
+		else if (isNewer && !isSignificantlyLessAccurate && isFromSameProvider)
+		{
+			return true;
+		}
+		return false;
 	}
 
-	private LocationListener locationListener;
-
-	ArrayCircleOverlay circleOverlay;
-	OverlayCircle overlayCircle;
-/*
-	private void enableGPS()
+	// Checks whether two providers are the same
+	private boolean isSameProvider(String provider1, String provider2)
 	{
-		circleOverlay = new ArrayCircleOverlay(this.circleOverlayFill, this.circleOverlayOutline, this);
-		overlayCircle = new OverlayCircle();
-		circleOverlay.addCircle(this.overlayCircle);
-		mapView.getOverlays().add(this.circleOverlay);
-
-
-		locationListener = new LocationListener()
+		if (provider1 == null)
 		{
-			private boolean first = true;
-			@Override
-			public void onLocationChanged(Location location)
-			{
-				GeoPoint point = new GeoPoint(location.getLatitude(), location.getLongitude());
+			return provider2 == null;
+		}
+		return provider1.equals(provider2);
+	}
 
-				// If it is the first one.
-				if (first)
-				{
-					mapController.setCenter(point);
-					first = false;
-				}
-				overlayCircle.setCircleData(point, location.getAccuracy());
-			}
 
-			@Override
-			public void onProviderDisabled(String provider)
-			{
-				disableFollowGPS(false);
-				showDialog(DIALOG_GPS_DISABLED);
-			}
+	private LocationListener locationListener = new LocationListener()
+	{
+		private boolean first = true;
 
-			@Override
-			public void onProviderEnabled(String provider)
-			{
-				// do nothing
-			}
-
-			@Override
-			public void onStatusChanged(String provider, int status, Bundle extras)
-			{
-				if (status == LocationProvider.AVAILABLE)
-				{
-					AdvancedMapViewer.this.gpsView.setImageResource(R.drawable.stat_sys_gps_on);
-				}
-				else if (status == LocationProvider.OUT_OF_SERVICE)
-				{
-					AdvancedMapViewer.this.gpsView.setImageResource(R.drawable.stat_sys_gps_acquiring);
-				}
-				else
-				{
-					// must be TEMPORARILY_UNAVAILABLE
-					AdvancedMapViewer.this.gpsView.setImageResource(R.anim.gps_animation);
-					((AnimationDrawable) AdvancedMapViewer.this.gpsView.getDrawable()).start();
-				}
-			}
-		};
-
-		this.locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 0, this.locationListener);
-		this.gpsView.setImageResource(R.drawable.stat_sys_gps_acquiring);
-		this.gpsView.setVisibility(View.VISIBLE);
-		this.gpsView.setOnClickListener(new OnClickListener()
+		public void onLocationChanged(Location location)
 		{
-			@Override
-			public void onClick(View v)
+			if (isBetterLocation(location, currentLocation))
+				currentLocation = location;
+
+			GeoPoint point = new GeoPoint(currentLocation.getLatitude(), currentLocation.getLongitude());
+
+			// If it is the first one.
+			if (first)
 			{
-				disableFollowGPS(true);
+				mapController.setCenter(point);
+				first = false;
 			}
-		});
-	}*/
+			locationCircle.setCircleData(point, currentLocation.getAccuracy());
+		}
+
+		public void onStatusChanged(String s, int i, Bundle bundle)
+		{
+		}
+
+		public void onProviderEnabled(String s)
+		{
+		}
+
+		public void onProviderDisabled(String s)
+		{
+			currentLocation = null;
+			locationCircle.setCircleData(new GeoPoint(0.0, 0.0), 0.0f);
+		}
+	};
+
+	private void startGPS()
+	{
+		locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 0, locationListener);
+		locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 1000, 0, locationListener);
+	}
+
+	private void stopGPS()
+	{
+		locationManager.removeUpdates(locationListener);
+	}
 
 	private Timer updateTimer;
 
@@ -242,13 +332,32 @@ public class CycleMapActivity extends MapActivity
 		updateTimer.schedule(new UpdateDocksTask(), 1);
 	}
 
+	// Stop updates.
+	private void stopUpdates()
+	{
+		if (updateTimer != null)
+			updateTimer.cancel();
+	}
+
 	class UpdateDocksTask extends TimerTask
 	{
 		public void run()
 		{
-			runOnUiThread(new Runnable() { public void run() { setProgressBarIndeterminateVisibility(true); } });
+			runOnUiThread(new Runnable()
+			{
+				public void run()
+				{
+					setProgressBarIndeterminateVisibility(true);
+				}
+			});
 			refreshDocks();
-			runOnUiThread(new Runnable() { public void run() { setProgressBarIndeterminateVisibility(false); } });
+			runOnUiThread(new Runnable()
+			{
+				public void run()
+				{
+					setProgressBarIndeterminateVisibility(false);
+				}
+			});
 			updateTimer = new Timer();
 			updateTimer.schedule(new UpdateDocksTask(), 60*1000); // Update in 60 seconds.
 		}
