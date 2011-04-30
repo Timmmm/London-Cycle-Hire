@@ -9,6 +9,8 @@ import org.mapsforge.android.maps.ItemizedOverlay;
 import org.mapsforge.android.maps.OverlayItem;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 
 /**
  * Map overlay that shows the docks and the number of slots/bikes left.
@@ -88,6 +90,15 @@ public class DockOverlay extends ItemizedOverlay<DockOverlayItem>
 		populate(); // Redraws everything. Doesn't actually populate anything.
 	}
 
+	private class SortByLatitude implements Comparator<OverlayItem>
+	{
+		public int compare(OverlayItem o1, OverlayItem o2)
+		{
+			double diff = o2.getPoint().getLatitude() - o1.getPoint().getLatitude();
+			return diff > 0.0 ? 1 : (diff < 0.0 ? -1 : 0);
+		}
+	}
+
 	public void updateDocks(DockSet dockSet)
 	{
 		synchronized (overlayItems)
@@ -106,6 +117,9 @@ public class DockOverlay extends ItemizedOverlay<DockOverlayItem>
 				
 				overlayItems.add(new DockOverlayItem(new GeoPoint(lat, lon), dockSet.name(i), bikes, slots, markers[b]));
 			}
+
+			// Sort them from bottom to top.
+			Collections.sort(overlayItems, new SortByLatitude());
 		}
 		populate();
 	}
