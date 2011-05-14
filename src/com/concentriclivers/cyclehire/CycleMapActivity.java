@@ -8,6 +8,7 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Environment;
+import android.provider.ContactsContract;
 import android.util.Log;
 import android.view.*;
 import android.widget.Toast;
@@ -43,6 +44,8 @@ public class CycleMapActivity extends MapActivity
 	{
 		return currentLocation;
 	}*/
+
+	boolean updateInstantly = true;
 
 	// Called when the activity is first created.
 	@Override
@@ -105,10 +108,39 @@ public class CycleMapActivity extends MapActivity
 		mapController = mapView.getController();
 		locationManager = (LocationManager)getSystemService(LOCATION_SERVICE);
 
-		// Got to last location.
-		currentLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-		mapController.setCenter(new GeoPoint(currentLocation.getLatitude(), currentLocation.getLongitude()));
-	
+
+		// Initial population of the dockset.
+		Object data = getLastNonConfigurationInstance();
+
+		// The activity is starting for the first time, load the photos from Flickr
+		if (data == null)
+		{
+			// Restore dock locations only.
+			restoreDockLocations();
+			updateInstantly = true; // The update will happen in onResume();
+			// Got to last location.
+			currentLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+			mapController.setCenter(new GeoPoint(currentLocation.getLatitude(), currentLocation.getLongitude()));
+		}
+		else
+		{
+			// The activity was destroyed/created automatically (due to rotation), populate it
+			// with the dockset loaded by the previous activity.
+			NonConfigurationInstance instance = (NonConfigurationInstance)data;
+			dockSet = instance.dockSet;
+			currentLocation = instance.currentLocation;
+			if (currentLocation != null)
+			{
+				GeoPoint point = new GeoPoint(currentLocation.getLatitude(), currentLocation.getLongitude());
+				locationCircle.setCircleData(point, currentLocation.getAccuracy());
+				locationOverlay.requestRedraw();
+			}
+			updateInstantly = false; // Don't trigger the update in onResume() instantly because we just rotated.
+		}
+		dockOverlay.updateDocks(dockSet);
+
+
+
 	}
 
 	@Override
@@ -116,12 +148,12 @@ public class CycleMapActivity extends MapActivity
 	{
 		super.onResume();
 
-		// Start dock updates.
-		triggerUpdates();
+		// Start dock updates, but wait 30 seconds because this might have been a rotation or they might have just switched apps.
+		// TODO: We really need to look at the last update time, and go 60 seconds from that!
+		// Yeah just save the last update time in sharedpreferences, and work it out from there.
+		triggerUpdates(updateInstantly ? 1 : 1);//30*1000);
 		// Start position updates.
 		startGPS();
-		// Restore dock locations.
-		restoreDockLocations();
 	}
 
 	@Override
@@ -129,16 +161,34 @@ public class CycleMapActivity extends MapActivity
 	{
 		super.onPause();
 
+		updateInstantly = false;
+
 		// Stop dock updates.
 		stopUpdates();
 		// Stop GPS.
 		stopGPS();
+
+		// TODO: Post-honeycomb, this can be moved to onStop() because the activity is not killed until after onStop() returns.
 		// Save dock locations.
 		saveDockLocations();
 	}
 
 	DockSet dockSet = new DockSet();
 
+	private class NonConfigurationInstance
+	{
+		DockSet dockSet;
+		Location currentLocation;
+	}
+
+	@Override
+	public Object onRetainNonConfigurationInstance()
+	{
+		NonConfigurationInstance instance = new NonConfigurationInstance();
+		instance.dockSet = dockSet;
+		instance.currentLocation = currentLocation;
+		return instance;
+	}
 	// Refresh the docks. This is blocking and is called in another thread.
 	private void refreshDocks()
 	{
@@ -219,7 +269,7 @@ public class CycleMapActivity extends MapActivity
 			}
 			return true;
 		case R.id.refresh:
-			triggerUpdates();
+			triggerUpdates(1);
 			return true;
 /*		case R.id.about:
 			return true;
@@ -304,11 +354,9 @@ public class CycleMapActivity extends MapActivity
 
 	private LocationListener locationListener = new LocationListener()
 	{
-		// True if we have not received any locations yet.
-		private boolean first = true;
-
 		public void onLocationChanged(Location location)
 		{
+			boolean first = currentLocation == null;
 			if (isBetterLocation(location, currentLocation))
 				currentLocation = location;
 
@@ -317,14 +365,10 @@ public class CycleMapActivity extends MapActivity
 			// If it is the first one.
 			if (first)
 			{
-				// TODO: This doesn't update the map properly. Perhaps it should be run in UI thread?
 				mapController.setCenter(point);
-				first = false;
 			}
 			locationCircle.setCircleData(point, currentLocation.getAccuracy());
-
-			// Hopefully should fix the location-not-showing bug.
-			mapView.postInvalidate();
+			locationOverlay.requestRedraw();
 		}
 
 		public void onStatusChanged(String s, int i, Bundle bundle)
@@ -338,7 +382,6 @@ public class CycleMapActivity extends MapActivity
 		public void onProviderDisabled(String s)
 		{
 			currentLocation = null;
-			first = true;
 			locationCircle.setCircleData(new GeoPoint(0.0, 0.0), 0.0f);
 		}
 	};
@@ -356,14 +399,15 @@ public class CycleMapActivity extends MapActivity
 
 	private Timer updateTimer;
 
-	// Triggers an immediate update. Each update also triggers a succeeding one.
-	private void triggerUpdates()
+	// Trigger updates. Each update also triggers a succeeding one.
+	// firstDelay is the delay in millisecond before the first update.
+	private void triggerUpdates(int firstDelay)
 	{
 		if (updateTimer != null)
 			updateTimer.cancel();
 
 		updateTimer = new Timer();
-		updateTimer.schedule(new UpdateDocksTask(), 1);
+		updateTimer.schedule(new UpdateDocksTask(), firstDelay);
 	}
 
 	// Stop updates.
@@ -426,7 +470,7 @@ public class CycleMapActivity extends MapActivity
 
 
 
-	// Writes the map stored in the apk to the sd card. TODO: download on first run.
+	// Writes the map stored in the apk to the sd card.
 	private boolean writeMap(String dir, String filename)
 	{
 		File f = new File(dir + "/" + filename);
@@ -463,9 +507,17 @@ public class CycleMapActivity extends MapActivity
 	}
 
 
-	void showToast(String text)
+	private void showToast(String text)
 	{
 		Toast toast = Toast.makeText(this, text, Toast.LENGTH_LONG);
 		toast.show();
 	}
+
+/*	private String updateTime;
+
+	private void updateTitleText()
+	{
+		boolean bikes = dockOverlay != null ? dockOverlay.isShowingBikes() : true;
+		String
+	}*/
 }

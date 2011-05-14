@@ -3,11 +3,11 @@
           package="com.concentriclivers.cyclehire"
           android:versionCode="1"
           android:versionName="1.0">
-	<application android:label="Cycle Hire" android:icon="@drawable/icon" android:debuggable="true"
+	<application android:label="@string/app_name" android:icon="@drawable/icon" android:debuggable="true"
 	             android:installLocation="auto">
 		<activity android:name=".CycleMapActivity"
-		          android:label="@string/app_name"
-		          android:launchMode="singleTask">
+		          android:label="@string/app_name">
+		          <!--android:launchMode="singleTask">-->
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN"/>
 				<category android:name="android.intent.category.LAUNCHER"/>

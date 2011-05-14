@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-	<string name="app_name">Cycle Hire</string>
+	<string name="app_name">London Cycle Hire</string>
 	<string name="show_bikes">Bikes</string>
 	<string name="show_slots">Slots</string>
 	<string name="refresh">Refresh</string>

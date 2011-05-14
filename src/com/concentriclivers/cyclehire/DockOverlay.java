@@ -96,6 +96,11 @@ public class DockOverlay extends ItemizedOverlay<DockOverlayItem>
 		populate(); // Redraws everything. Doesn't actually populate anything.
 	}
 
+	public boolean isShowingBikes()
+	{
+		return showingBikes;
+	}
+
 	private class SortByLatitude implements Comparator<OverlayItem>
 	{
 		public int compare(OverlayItem o1, OverlayItem o2)

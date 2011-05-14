@@ -1,5 +1,6 @@
 package com.concentriclivers.cyclehire;
 
+import android.text.Html;
 import android.util.Log;
 
 import java.util.ArrayList;
@@ -122,6 +123,8 @@ public class DockSet
 
 		for (int i = 0; i < docks.size(); ++i)
 		{
+			if (i != 0)
+				str.append(",");
 			str.append(String.valueOf(docks.get(i).latitude));
 			str.append(",");
 			str.append(String.valueOf(docks.get(i).longitude));
@@ -136,12 +139,20 @@ public class DockSet
 		String[] coords = str.split(",");
 		for (int i = 0; i < coords.length / 2; ++i)
 		{
-			Dock d = new Dock();
-			d.latitude = Double.parseDouble(coords[2*i]);
-			d.longitude = Double.parseDouble(coords[2*i+1]);
-			d.slots = -1;
-			d.bikes = -1;
-			docks.add(d);
+			try
+			{
+				Dock d = new Dock();
+				d.latitude = Double.parseDouble(coords[2*i]);
+				d.longitude = Double.parseDouble(coords[2*i+1]);
+				d.slots = -1;
+				d.bikes = -1;
+				docks.add(d);
+			}
+			catch (NumberFormatException e)
+			{
+				Log.d("Number", coords[2*i] + ";" + coords[2*i+1]);
+				e.printStackTrace();
+			}
 		}
 		return !docks.isEmpty();
 	}
