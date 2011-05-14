@@ -24,6 +24,8 @@ public class DockOverlay extends ItemizedOverlay<DockOverlayItem>
 
 	private Drawable markers[] = new Drawable[NUM_MARKERS];
 
+	private Drawable emptyMarker;
+
 	private static final int ARRAY_LIST_INITIAL_CAPACITY = 8;
 	private static final String THREAD_NAME = "DockOverlay";
 
@@ -36,11 +38,15 @@ public class DockOverlay extends ItemizedOverlay<DockOverlayItem>
 		super(null);
 		this.context = context;
 
-		// God damn it android why do I have to set the bounds myself? Never heard of sane defaults?!
+		int id = R.drawable.marker;
+		// The plain white marker.
+		emptyMarker = context.getResources().getDrawable(id);
+		emptyMarker.setBounds(-emptyMarker.getIntrinsicWidth()/2, -emptyMarker.getIntrinsicHeight(),
+		                       emptyMarker.getIntrinsicWidth()/2, 0);
 
 		for (int i = 0; i < markers.length; ++i)
 		{
-			int id = R.drawable.marker;
+			// The numbered markers (the last one has no digit and represents 'plenty').
 			try
 			{
 				id = R.drawable.class.getField("marker_" + Integer.toString(i)).getInt(null);
@@ -68,7 +74,7 @@ public class DockOverlay extends ItemizedOverlay<DockOverlayItem>
 				int b = overlayItems.get(i).bikes;
 				if (b > NUM_MARKERS-1)
 					b = NUM_MARKERS-1;
-				overlayItems.get(i).setMarker(markers[b]);
+				overlayItems.get(i).setMarker(b < 0 ? emptyMarker : markers[b]);
 			}
 		}
 		populate(); // Redraws everything. Doesn't actually populate anything.
@@ -84,7 +90,7 @@ public class DockOverlay extends ItemizedOverlay<DockOverlayItem>
 				int b = overlayItems.get(i).slots;
 				if (b > NUM_MARKERS-1)
 					b = NUM_MARKERS-1;
-				overlayItems.get(i).setMarker(markers[b]);
+				overlayItems.get(i).setMarker(b < 0 ? emptyMarker : markers[b]);
 			}
 		}
 		populate(); // Redraws everything. Doesn't actually populate anything.
@@ -114,8 +120,9 @@ public class DockOverlay extends ItemizedOverlay<DockOverlayItem>
 				int b = showingBikes ? bikes : slots;
 				if (b > NUM_MARKERS-1)
 					b = NUM_MARKERS-1;
-				
-				overlayItems.add(new DockOverlayItem(new GeoPoint(lat, lon), dockSet.name(i), bikes, slots, markers[b]));
+
+				overlayItems.add(new DockOverlayItem(new GeoPoint(lat, lon), dockSet.name(i), bikes, slots,
+				                 b < 0 ? emptyMarker : markers[b]));
 			}
 
 			// Sort them from bottom to top.

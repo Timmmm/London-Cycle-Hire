@@ -1,5 +1,6 @@
 package com.concentriclivers.cyclehire;
 
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.location.Location;
@@ -98,7 +99,7 @@ public class CycleMapActivity extends MapActivity
 
 		// Set up window.
         setContentView(mapView);
-		setTitle("Cycle Hire - Available Bikes");
+		setTitle("Available Bikes");
 
 		// Initialise service references.
 		mapController = mapView.getController();
@@ -119,6 +120,8 @@ public class CycleMapActivity extends MapActivity
 		triggerUpdates();
 		// Start position updates.
 		startGPS();
+		// Restore dock locations.
+		restoreDockLocations();
 	}
 
 	@Override
@@ -130,7 +133,11 @@ public class CycleMapActivity extends MapActivity
 		stopUpdates();
 		// Stop GPS.
 		stopGPS();
+		// Save dock locations.
+		saveDockLocations();
 	}
+
+	DockSet dockSet = new DockSet();
 
 	// Refresh the docks. This is blocking and is called in another thread.
 	private void refreshDocks()
@@ -140,14 +147,15 @@ public class CycleMapActivity extends MapActivity
 		if (csv.isEmpty())
 			return;
 
-		DockSet dockSet = new DockSet();
+		synchronized (dockSet)
+		{
+			// Decode it.
+			dockSet.loadFromCSV(csv);
 
-		// Decode it.
-		dockSet.loadFromCSV(csv);
-
-		// Update the map overlay. This is threadsafe so it's fine.
-		if (dockSet.numDocks() > 0)
-			dockOverlay.updateDocks(dockSet);
+			// Update the map overlay. This is threadsafe so it's fine.
+			if (dockSet.numDocks() > 0)
+				dockOverlay.updateDocks(dockSet);
+		}
 	}
 
 	// Blocking function which downloads a text (UTF-8) file and returns it as a string.
@@ -198,11 +206,11 @@ public class CycleMapActivity extends MapActivity
 		{
 		case R.id.show_bikes:
 			dockOverlay.showBikes();
-			setTitle("Cycle Hire - Available Bikes");
+			setTitle("Available Bikes");
 			return true;
 		case R.id.show_slots:
 			dockOverlay.showSlots();
-			setTitle("Cycle Hire - Available Slots");
+			setTitle("Available Slots");
 			return true;
 		case R.id.show_location:
 			if (currentLocation != null)
@@ -296,6 +304,7 @@ public class CycleMapActivity extends MapActivity
 
 	private LocationListener locationListener = new LocationListener()
 	{
+		// True if we have not received any locations yet.
 		private boolean first = true;
 
 		public void onLocationChanged(Location location)
@@ -308,10 +317,14 @@ public class CycleMapActivity extends MapActivity
 			// If it is the first one.
 			if (first)
 			{
+				// TODO: This doesn't update the map properly. Perhaps it should be run in UI thread?
 				mapController.setCenter(point);
 				first = false;
 			}
 			locationCircle.setCircleData(point, currentLocation.getAccuracy());
+
+			// Hopefully should fix the location-not-showing bug.
+			mapView.postInvalidate();
 		}
 
 		public void onStatusChanged(String s, int i, Bundle bundle)
@@ -325,6 +338,7 @@ public class CycleMapActivity extends MapActivity
 		public void onProviderDisabled(String s)
 		{
 			currentLocation = null;
+			first = true;
 			locationCircle.setCircleData(new GeoPoint(0.0, 0.0), 0.0f);
 		}
 	};
@@ -392,10 +406,22 @@ public class CycleMapActivity extends MapActivity
 		return Environment.MEDIA_MOUNTED.equals(state);
 	}
 
+    public static final String PREFS_NAME = "CycleHirePrefs";
 
+	private void saveDockLocations()
+	{
+		SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
+		SharedPreferences.Editor editor = settings.edit();
+		editor.putString("docks", dockSet.locationsToString());
+		editor.commit();
+	}
 
-
-
+	private void restoreDockLocations()
+	{
+		SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
+		String docks = settings.getString("docks", "");
+		dockSet.locationsFromString(docks);
+	}
 
 
 

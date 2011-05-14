@@ -111,9 +111,39 @@ public class DockSet
 	}
 
 	// Whether the dock is open or not -- sometimes they close.
-	public boolean open(int index)
+/*	public boolean open(int index)
 	{
 		return true;
+	}*/
+
+	public String locationsToString()
+	{
+		StringBuilder str = new StringBuilder();
+
+		for (int i = 0; i < docks.size(); ++i)
+		{
+			str.append(String.valueOf(docks.get(i).latitude));
+			str.append(",");
+			str.append(String.valueOf(docks.get(i).longitude));
+		}
+		return str.toString();
+	}
+
+	public boolean locationsFromString(String str)
+	{
+		docks.clear();
+
+		String[] coords = str.split(",");
+		for (int i = 0; i < coords.length / 2; ++i)
+		{
+			Dock d = new Dock();
+			d.latitude = Double.parseDouble(coords[2*i]);
+			d.longitude = Double.parseDouble(coords[2*i+1]);
+			d.slots = -1;
+			d.bikes = -1;
+			docks.add(d);
+		}
+		return !docks.isEmpty();
 	}
 
 	private class Dock
@@ -128,4 +158,5 @@ public class DockSet
 	}
 
 	private ArrayList<Dock> docks = new ArrayList<Dock>();
+
 }

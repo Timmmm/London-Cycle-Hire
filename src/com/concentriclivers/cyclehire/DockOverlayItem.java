@@ -6,6 +6,7 @@ import org.mapsforge.android.maps.OverlayItem;
 
 public class DockOverlayItem extends OverlayItem
 {
+	// -1 means unknown, in which case a white icon is shown.
 	public int bikes;
 	public int slots;
 
