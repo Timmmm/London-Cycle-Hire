@@ -112,15 +112,17 @@ public class CycleMapActivity extends MapActivity
 		// Initial population of the dockset.
 		Object data = getLastNonConfigurationInstance();
 
-		// The activity is starting for the first time, load the photos from Flickr
 		if (data == null)
 		{
+			// The activity is starting for the first time,
 			// Restore dock locations only.
 			restoreDockLocations();
 			updateInstantly = true; // The update will happen in onResume();
-			// Got to last location.
+
+			// Got to last location. But we're not sure about it... so don't mark it or count it as a move.
 			currentLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
 			mapController.setCenter(new GeoPoint(currentLocation.getLatitude(), currentLocation.getLongitude()));
+			currentLocation = null;
 		}
 		else
 		{
